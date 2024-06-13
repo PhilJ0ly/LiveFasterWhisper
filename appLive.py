@@ -52,9 +52,9 @@ def main():
 
     # background thread passingf raw audio bytes
     recorder.listen_in_background(
-        source, record_callback, phrase_time_limit=2)
+        source, record_callback, phrase_time_limit=100)
 
-    print("Model Loaded!!!!\n")
+    print("\nModel Loaded!!!!\n")
 
     while True:
         try:
@@ -66,7 +66,7 @@ def main():
 
                 # if enough time b/w recordings we consider the phrase complete
                 # we then clear the current working audio buffer to start over with new data
-                if phrase_time and now - phrase_time > timedelta(seconds=3):
+                if phrase_time and now - phrase_time > timedelta(seconds=100):
                     phrase_complete = True
 
                 phrase_time = now
