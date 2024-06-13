@@ -18,7 +18,9 @@ import os
 import speech_recognition as sr
 from faster_whisper import WhisperModel
 
-from langchain_huggingface import HuggingFaceEndpoint as hf
+from langchain_huggingface import HuggingFaceEndpoint as hf, HuggingFacePipeline
+from langchain_core.prompts import PromptTemplate
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM, pipeline
 
 params = {
     "energy": 1000,
@@ -26,7 +28,8 @@ params = {
     "whisper model": "base",
     "whisper device": ["cpu", "int8"],
     "phrase time limit": 100,
-    "llm id": "facebook/blenderbot-400M-distill",
+    "llm id": "facebook/blenderbot-1B-distill",
+    "model type": "text2text-generation",
     "latency": 2,
     "beams": 5
 }
@@ -34,12 +37,6 @@ params = {
 
 def main():
     load_dotenv(find_dotenv())
-
-    hfKey = os.environ.get('HUGGING_FACE_KEY')
-    if not hfKey:
-        print("cannot load HUGGING_FACE_KEY")
-        return
-    print("Keys locked and loaded!")
 
     data_queue = Queue()
     phrase_time = None
@@ -57,8 +54,12 @@ def main():
     try:
         whisk = WhisperModel(params["whisper model"], device=params["whisper device"]
                              [0], compute_type=params["whisper device"][1])
-        llm = hf(repo_id=params["llm id"],
-                 huggingfacehub_api_token=hfKey)
+
+        tokenizer = AutoTokenizer.from_pretrained(params["llm id"])
+        model = AutoModelForSeq2SeqLM.from_pretrained(params["llm id"])
+        pipe = pipeline(params["model type"], model=model,
+                        tokenizer=tokenizer, max_length=100)
+        llm = HuggingFacePipeline(pipeline=pipe)
         print("Models loaded and ready to fire")
     except Exception as e:
         print("an error occured loading the models: ", str(e))
@@ -78,21 +79,25 @@ def main():
     print("Start the conversation...\n")
 
     # main conversation loop
+    flag = True
+
     while True:
         try:
             now = datetime.now()
 
+            if phrase_time and flag and now-phrase_time > timedelta(seconds=params["latency"]):
+                flag = False
+                response = llm.invoke(transcription[-1])
+                print("[LLM] ", response)
+
             # pull audio from queue
             if not data_queue.empty():
                 phrase_complete = False
+                flag = True
 
                 # if enough time since phrase we consider complete
                 if phrase_time and now-phrase_time > timedelta(seconds=params["latency"]):
                     phrase_complete = True
-                    # print('ranscription[-1]')
-                    response = llm.invoke(transcription[-1])
-                    print("[LLM] ", response)
-
 
                 phrase_time = now
 
@@ -112,10 +117,6 @@ def main():
                     else:
                         transcription[-1] = transcription[-1] + seg.text
 
-                # os.system('cls' if os.name == 'nt' else 'clear')
-                # for phrase in transcription:
-                #     print(phrase)
-                #     print('', end='', flush=True)
                 print(transcription[-1])
             else:
                 sleep(0.2)
