@@ -1,0 +1,9 @@
+python-dotenv
+numpy
+queue
+datetime
+time
+os
+speech_recognition
+faster_whisper
+langchain_huggingface
